@@ -1,5 +1,6 @@
 import streamlit as st
 from openai import OpenAI
+import time
 
 # Initialize OpenAI client
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
@@ -9,23 +10,60 @@ st.set_page_config(
     page_title="Chat with mini",
     page_icon="💭",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
+
+# Custom CSS
+st.markdown("""
+<style>
+    .stTextInput>div>div>input {
+        background-color: #f0f2f6;
+    }
+    .stButton>button {
+        width: 100%;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # Initialize session state
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
 
-# Define callback function
+# Sidebar
+with st.sidebar:
+    st.title("Settings")
+    temperature = st.slider("Temperature", min_value=0.1, max_value=1.0, value=0.80, step=0.1)
+    max_tokens = st.slider("Max Tokens", min_value=50, max_value=4000, value=3192, step=50)
+    theme = st.selectbox("Theme", ["Light", "Dark"])
+    if theme == "Dark":
+        st.markdown("""
+        <style>
+        .stApp {
+            background-color: #2b2b2b;
+            color: #ffffff;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
+# Define callback functions
 def clear_chat():
     st.session_state.messages = []
 
-# Simple header with controls
-col1, col2 = st.columns([7, 1])
+def save_chat():
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    st.session_state.chat_history.append((timestamp, st.session_state.messages))
+    st.success(f"Chat saved at {timestamp}")
+
+# Header with controls
+col1, col2, col3 = st.columns([5, 1, 1])
 with col1:
     st.title("Chat with mini")
 with col2:
-    st.button("clear chat", type="secondary", on_click=clear_chat)
+    st.button("Clear Chat", type="secondary", on_click=clear_chat)
+with col3:
+    st.button("Save Chat", type="primary", on_click=save_chat)
 
 # Chat messages
 for message in st.session_state.messages:
@@ -33,7 +71,9 @@ for message in st.session_state.messages:
         st.write(message["content"])
 
 # Get user input
-if prompt := st.chat_input("What's on your mind?"):
+prompt = st.chat_input("What's on your mind?")
+
+if prompt:
     # Add user message to chat history
     st.session_state.messages.append({"role": "user", "content": prompt})
     
@@ -51,7 +91,7 @@ if prompt := st.chat_input("What's on your mind?"):
                     "content": """you're a casual, thoughtful poster who engages in longer-form conversation while keeping it natural. you should:
 - use all lowercase
 - share deeper thoughts on learning/growth/tech
-- maintain your dry humor while going into detail
+- maintain your humor while going into detail
 - treat short questions as openings for broader thoughts
 - draw connections between topics
 - feel free to express complex ideas in simple terms
@@ -71,11 +111,11 @@ avoid:
 
 remember to always write in lowercase and maintain a natural, conversational flow. treat each interaction as a chance to share interesting perspectives while staying relatable."""
                 }] + st.session_state.messages,
-                temperature=0.7,
-                max_tokens=3192,
+                temperature=temperature,
+                max_tokens=max_tokens,
                 top_p=1.0,
-                frequency_penalty=0.35,
-                presence_penalty=0.40,
+                frequency_penalty=0.10,
+                presence_penalty=0.10,
                 response_format={"type": "text"}
             )
 
@@ -86,4 +126,13 @@ remember to always write in lowercase and maintain a natural, conversational flo
                 st.write(assistant_response)
 
         except Exception as e:
-            st.error(f"An error occurred: {str(e)}") 
+            st.error(f"An error occurred: {str(e)}")
+
+# Display chat history
+if st.session_state.chat_history:
+    st.subheader("Chat History")
+    for timestamp, chat in st.session_state.chat_history:
+        if st.button(f"Load chat from {timestamp}"):
+            st.session_state.messages = chat
+            st.experimental_rerun()
+
